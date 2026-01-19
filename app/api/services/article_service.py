@@ -1,7 +1,7 @@
 import json
 from typing import Dict, List
 
-from sqlalchemy import func
+from sqlalchemy import func, exists
 from sqlalchemy.orm import Session
 
 from app.core.database import session_scope
@@ -13,7 +13,11 @@ from app.schemas.response import success
 
 
 def get_article_list(db: Session, query: ArticleQuery) -> Dict:
-    q = db.query(Article)
+    in_stock_expr = exists().where(
+        DownloadLog.tid == Article.tid
+    )
+
+    q = db.query(Article,in_stock_expr.label("in_stock"))
     if query.keyword:
         q = q.filter(Article.title.ilike(f"%{query.keyword}%"))
     if query.section:
@@ -35,12 +39,17 @@ def get_article_list(db: Session, query: ArticleQuery) -> Dict:
     per_page = query.per_page
     offset = (page - 1) * per_page
 
-    items = (
+    rows = (
         q.order_by(Article.tid.desc())
         .offset(offset)
         .limit(per_page)
         .all()
     )
+    items = []
+    for article, in_stock in rows:
+        setattr(article, "in_stock", in_stock)
+        items.append(article)
+
     return success({
         "page": page,
         "per_page": per_page,
@@ -191,3 +200,10 @@ def download_article(tid: int):
                 if is_success:
                     success_count += 1
     return success(f"成功添加：{success_count}")
+
+
+def manul_download(tid, downloader, save_path):
+    with session_scope() as db:
+        article = db.get(Article, tid)
+    is_success = download_magnet(article.tid, article.magnet, downloader, save_path)
+    return success(is_success)

@@ -31,9 +31,14 @@ def get_torrent(keyword, db: Session = Depends(get_db)):
 
 
 @router.get("/download")
-def download_article(tid: int,  user: User = Depends(get_current_user)):
+def download_article(tid: int, user: User = Depends(get_current_user)):
     threading.Thread(target=lambda: article_service.download_article(tid)).start()
     return success("已创建下载任务")
+
+
+@router.get("/download/manul")
+async def manul_download(tid: int, downloader, save_path, user: User = Depends(get_current_user)):
+    return article_service.manul_download(tid, downloader, save_path)
 
 
 templates = Jinja2Templates(directory=f"{root_path}/app/templates")
