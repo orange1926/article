@@ -8,6 +8,7 @@ from app.core.database import session_scope
 from app.models.article import Article
 from app.utils.log import logger
 from app.modules.sht import sht
+from app.utils.wrapper import task_monitor
 
 section_map = {
     '2': "国产原创",
@@ -23,29 +24,37 @@ section_map = {
     "107": "三级写真"
 }
 
-
+@task_monitor
 def sync_sht_by_tid():
-    message = ""
+    result = []
     for fid in section_map:
         section = section_map[fid]
-        success_count, page, fail_count = sync_new_article(fid, 1, 100)
-        if success_count + fail_count > 0:
-            message = f"{message}[{section}]抓取至第{page}页,新增帖子{success_count}篇,抓取失败{fail_count}篇\n"
-    if message:
-        logger.info(message)
-        save_result_to_file(message)
+        success_count, page, fail_list = sync_new_article(fid, 1, 100)
+        result.append(
+            {
+                "section": section,
+                "success_count": success_count,
+                "page": page-1,
+                "fail_list": fail_list,
+            }
+        )
+    return result
 
-
+@task_monitor
 def sync_sht_by_max_page(max_page):
-    message = ""
+    result = []
     for fid in section_map:
         section = section_map[fid]
-        success_count, page, fail_count = sync_new_article_no_stop(fid, 1, max_page)
-        if success_count + fail_count > 0:
-            message = f"{message}[{section}]抓取至第{page}页,新增帖子{success_count}篇,抓取失败{fail_count}篇\n"
-    if message:
-        logger.info(message)
-        save_result_to_file(message)
+        success_count, page, fail_list = sync_new_article_no_stop(fid, 1, max_page)
+        result.append(
+            {
+                "section": section,
+                "success_count": success_count,
+                "page": page-1,
+                "fail_list": fail_list,
+            }
+        )
+    return result
 
 
 def sync_new_article(fid, start_page=1, max_page=100):
@@ -127,8 +136,7 @@ def sync_new_article(fid, start_page=1, max_page=100):
     with session_scope() as session:
         session.add_all(articles)
     retry_fail_id_list = retry_fail_tid(fid, fail_id_list)
-    save_fail_tid_to_file(fid, retry_fail_id_list)
-    return success_count, page, len(retry_fail_id_list)
+    return success_count, page, retry_fail_id_list
 
 
 def sync_new_article_no_stop(fid, start_page=1, max_page=100):
@@ -195,39 +203,7 @@ def sync_new_article_no_stop(fid, start_page=1, max_page=100):
     with session_scope() as session:
         session.add_all(articles)
     retry_fail_id_list = retry_fail_tid(fid, fail_id_list)
-    save_fail_tid_to_file(fid, retry_fail_id_list)
-    return success_count, page, len(retry_fail_id_list)
-
-
-def save_fail_tid_to_file(fid, fail_id_list):
-    if not fail_id_list:
-        return
-
-    base_dir = os.path.join(data_path, 'fails')
-    os.makedirs(base_dir, exist_ok=True)
-    now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    file_name = f"{fid}-fail_tid_{now_str}.txt"
-    file_path = os.path.join(base_dir, file_name)
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(f"失败ID: {','.join(fail_id_list)}\n")
-    logger.warning(
-        f"失败TID已保存，共 {len(fail_id_list)} 条 -> {file_path}"
-    )
-
-
-def save_result_to_file(message):
-    if not message:
-        return
-    base_dir = os.path.join(data_path, 'result')
-    os.makedirs(base_dir, exist_ok=True)
-    now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    file_name = f"message_{now_str}.txt"
-    file_path = os.path.join(base_dir, file_name)
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(f"{message}")
-    logger.warning(
-        f"爬取结果已保存 -> {file_path}"
-    )
+    return success_count, page, retry_fail_id_list
 
 
 def retry_fail_tid(fid, fail_id_list):

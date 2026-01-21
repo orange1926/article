@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from app.core import settings
 from app.utils.log import logger
 
-engine = create_engine(settings.DATABASE_URL, echo=True)
+engine = create_engine(settings.DATABASE_URL)
 SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,

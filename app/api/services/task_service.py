@@ -1,12 +1,15 @@
 import json
 import threading
+from typing import List
 
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from app.models.task import Task
+from app.models.task_log import TaskLog
 from app.scheduler import restart_scheduler, FUNC_MAP
 from app.schemas.response import success
-from app.schemas.task import TaskForm
+from app.schemas.task import TaskForm, TaskLogFilter
 
 
 def list_task(db: Session):
@@ -53,5 +56,34 @@ def run_task(db: Session, task_id: int):
         kwargs = {}
         if args:
             kwargs = json.loads(str(args))
-        threading.Thread(target=lambda: FUNC_MAP[task.task_func](), kwargs=kwargs).start()
+        func = FUNC_MAP[task.task_func]
+        threading.Thread(
+            target=func,
+            kwargs=kwargs
+        ).start()
     return success()
+
+
+def page_task(db: Session, params: TaskLogFilter):
+    stmt = select(TaskLog)
+
+    if params.task_func:
+        stmt = stmt.where(TaskLog.task_func.like(f"%{params.task_func}%"))
+
+    total_stmt = select(func.count()).select_from(stmt.subquery())
+    total = db.execute(total_stmt).scalar_one()
+
+    offset = (params.page - 1) * params.page_size
+
+    items_stmt = (
+        stmt
+        .order_by(TaskLog.id.desc())
+        .offset(offset)
+        .limit(params.page_size)
+    )
+
+    items = db.execute(items_stmt).scalars().all()
+    return success({
+        "total": total,
+        "items": items
+    })
