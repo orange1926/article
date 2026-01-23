@@ -25,8 +25,8 @@ FUNC_MAP = [
     },
     {
         "func_name": "download_by_route",
-        "func_label": "路由入库任务",
-        "func_args": ["route_index_list"],
+        "func_label": "规则入库任务",
+        "func_args": ["rule_id_list"],
         "func": download_by_route
     },
 ]
