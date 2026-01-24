@@ -69,7 +69,7 @@ async def lifespan(app: FastAPI):
     load_downloader_manager()
     # 加载通知管理器
     load_pusher_manager()
-    # start_scheduler()
+    start_scheduler()
     logger.success("服务已启动: http://127.0.0.1:8080")
     yield
     if scheduler.running:
